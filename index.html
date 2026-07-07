@@ -540,6 +540,29 @@ let LOGO = '';
   }catch(e){ console.error('No se pudo cargar la plantilla DOCX:', e); }
 })();
 
+// Auto-sincronizar usuarios al cargar — diferido para que CU y doLogout ya existan
+setTimeout(async function autoSyncUsersOnLoad(){
+  const syncStatus=document.getElementById('sync-status');
+  if(syncStatus)syncStatus.textContent='⏳ Sincronizando usuarios...';
+  try{
+    const d=await gsCall({action:'getUsers'});
+    if(d&&d.users&&Array.isArray(d.users)&&d.users.length>0){
+      setUsers(d.users);
+      if(syncStatus)syncStatus.textContent='✓ Usuarios sincronizados ('+d.users.length+')';
+      setTimeout(()=>{if(syncStatus)syncStatus.textContent='';},4000);
+      // Revalidar sesión activa contra usuarios recién sincronizados
+      if(typeof CU!=='undefined'&&CU){
+        const fresh=d.users.find(x=>x.id===CU.id&&x.activo);
+        if(!fresh&&typeof doLogout==='function'){doLogout();}else if(fresh){CU=fresh;}
+      }
+    } else {
+      if(syncStatus)syncStatus.textContent='';
+    }
+  }catch(e){
+    if(syncStatus)syncStatus.textContent='';
+  }
+},0);
+
 // ── STORAGE ──────────────────────────────────────────────────────────────
 const K_USERS='enee_users_v4', K_SES='enee_session_v4', K_REG='enee_reg_v3';
 const ROL_LABEL={admin:'Administrador',operador:'Operador',lector:'Solo lectura'};
@@ -639,7 +662,7 @@ function doLogin(){
   const users=getUsers();
   const err=document.getElementById('login-err');
   const found=users.find(x=>x.username.toLowerCase()===u);
-  if(!found){err.textContent='Usuario "'+u+'" no existe. Disponibles: '+users.map(x=>x.username).join(', ');err.style.display='block';document.getElementById('l-pass').value='';return;}
+  if(!found){err.innerHTML='Usuario "'+u+'" no existe en esta PC.<br><small>Haz clic en <b>☁ Sincronizar usuarios con Google</b> para cargar los accesos.</small>';err.style.display='block';document.getElementById('l-pass').value='';return;}
   if(found.password!==p){err.textContent='Contraseña incorrecta para "'+u+'".';err.style.display='block';document.getElementById('l-pass').value='';return;}
   if(!found.activo){err.textContent='Usuario desactivado. Contacta al administrador.';err.style.display='block';return;}
   err.style.display='none';CU=found;localStorage.setItem(K_SES,JSON.stringify({id:found.id}));initApp();

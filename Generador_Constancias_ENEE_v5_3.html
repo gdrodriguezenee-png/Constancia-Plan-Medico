@@ -291,7 +291,7 @@ body{font-family:Arial,sans-serif;background:#f0f2f5;min-height:100vh;}
             <div class="pv-footer">Empresa Nacional de Energía Eléctrica, Tegucigalpa, Honduras.</div>
           </div>
           <div class="btns">
-            <button class="btn btn-dl" onclick="descargar()">⬇ Descargar constancia .docx</button>
+            <button class="btn btn-dl" onclick="imprimir()">🖨 Imprimir constancia</button>
             <button class="btn btn-cl" onclick="limpiar()">Limpiar</button>
           </div>
           <div id="pdf-drive-btn" style="margin-top:10px;display:none;">
@@ -805,6 +805,71 @@ function limpiar(){['fn','fc','fi','ic','f-monto'].forEach(id=>document.getEleme
 
 // ── GENERAR DOCX ──────────────────────────────────────────────────────────
 function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+async function imprimir(){
+  const nombre=(document.getElementById('fn').value||'').toUpperCase().trim();
+  const clave=document.getElementById('fc').value.trim();
+  const identidad=document.getElementById('fi').value.trim();
+  const fechaDoc=document.getElementById('ff').value;
+  if(!nombre||!clave||!identidad){showMsg('mg','er','Completa todos los campos primero.');return;}
+  const regActual=_rc||getReg();
+  const anteriores=regActual.filter(r=>String(r.clave)===String(clave));
+  if(anteriores.length>0){
+    const ult=anteriores[0];
+    if(!confirm('⚠️ ATENCIÓN — Constancia duplicada\n\nEl empleado '+nombre+' (clave '+clave+')\nya tiene '+anteriores.length+' constancia(s) emitida(s).\n\nÚltima: '+fmt(ult.fechaEmision)+' a las '+(ult.hora||'—')+'\nPor: '+(ult.usuario||'—')+'\n\n¿Generar de todas formas?'))return;
+  }
+  const monto=(document.getElementById('f-monto')?.value||'').trim();
+  const saldoTxt=saldo==='SI'
+    ?'SÍ TIENE SALDOS PENDIENTE CON LA EMPRESA POR CONCEPTO DE GASTOS MEDICOS'+(monto?' POR LA CANTIDAD DE L.'+monto:'')+'.'
+    :'NO TIENE SALDOS PENDIENTE CON LA EMPRESA POR CONCEPTO DE GASTOS MEDICOS.';
+  const jefeR=(CU.jefe||'LIC. CINTHIA ISABEL MURILLO').toUpperCase();
+  const cargoR=(CU.cargo||'JEFE DEPTO. DE BIENESTAR SOCIAL').toUpperCase();
+  const ini=getIniciales(CU);
+  const ahora=new Date();
+  const record={id:Date.now(),clave,nombre,identidad,tipo,saldo,monto,fechaDoc,
+    fechaEmision:ahora.toISOString().split('T')[0],
+    hora:ahora.toTimeString().slice(0,5),
+    usuario:CU.operador||CU.nombre,iniciales:ini,usuarioId:CU.id,region:CU.region||'Centralizada'};
+  const reg=getReg();reg.unshift(record);setReg(reg);
+  if(_rc)_rc.unshift(record);
+  actualizarBadge();gsAdd(record);pushUsersToGS();
+  showMsg('mg','ok','✓ Constancia registrada. Abriendo ventana de impresión...');
+  const win=window.open('','_blank','width=820,height=960');
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Constancia — ${nombre}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Times New Roman',serif;background:#fff;padding:32px 48px;}
+  .hdr{display:flex;align-items:center;gap:14px;margin-bottom:6px;}
+  .hdr img{height:60px;}
+  .hdr-txt{font-family:Cambria,serif;font-size:9.5pt;font-weight:700;color:#333;line-height:1.5;}
+  .dept{text-align:center;margin:10px 0 6px;}
+  .dept p{font-family:Cambria,serif;font-size:10.5pt;font-weight:700;color:#222;line-height:1.6;}
+  .titulo{text-align:center;background:#d9d9d9;font-family:'Times New Roman',serif;font-weight:700;font-size:14pt;text-decoration:underline;padding:5px 0;margin:10px 0 18px;letter-spacing:2px;}
+  .cuerpo{font-size:11.5pt;line-height:2;text-align:justify;margin-bottom:14px;}
+  .firma{margin-top:56px;text-align:center;font-size:11pt;}
+  .firma .cargo{color:#666;margin-top:4px;}
+  .cc{font-size:8.5pt;color:#999;margin-top:16px;}
+  .footer{background:#003087;color:#fff;text-align:center;padding:8px;font-size:9pt;font-style:italic;margin-top:20px;}
+  @media print{body{padding:18px 36px;}@page{margin:15mm 18mm;size:letter;}}
+</style></head><body>
+<div class="hdr">
+  <img src="${LOGO}" alt="ENEE"/>
+  <div class="hdr-txt">EMPRESA NACIONAL DE<br>ENERGÍA ELÉCTRICA</div>
+</div>
+<div class="dept"><p>DIRECCIÓN DE DESARROLLO HUMANO</p><p>DEPARTAMENTO DE BIENESTAR SOCIAL</p></div>
+<div class="titulo">C O N S T A N C I A</div>
+<p class="cuerpo">EN MI CONDICION DE JEFE DEL DEPARTAMENTO DE BIENESTAR SOCIAL DE LA EMPRESA NACIONAL DE ENERGIA ELECTRICA (ENEE), HAGO CONSTAR QUE EL EMPLEADO: <strong>${nombre}</strong>, CON CLAVE <strong>N. ${clave}</strong>, COMO EMPLEADO <strong>${tipo}</strong> CON IDENTIDAD: <strong>N. ${identidad}</strong>, ${saldoTxt}</p>
+<p class="cuerpo">Y PARA LOS FINES QUE ESTIME, SE EXTIENDE LA PRESENTE CONSTANCIA EN LA CIUDAD DE TEGUCIGALPA A LOS <strong>${fw(fechaDoc)}</strong>.</p>
+<div class="firma">
+  <p>${jefeR}</p>
+  <p class="cargo">${cargoR}</p>
+</div>
+<div class="cc"><p>CC. Archivo</p><p>&nbsp;&nbsp;&nbsp;${ini}</p></div>
+<div class="footer">Empresa Nacional de Energía Eléctrica, Tegucigalpa, Honduras.</div>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`);
+  win.document.close();
+}
 async function descargar(){
   const nombre=(document.getElementById('fn').value||'').toUpperCase().trim();
   const clave=document.getElementById('fc').value.trim();
